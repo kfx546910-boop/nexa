@@ -1,0 +1,6 @@
+{
+  "name": "Nexus AI - Custom Autonomous Local Model",
+  "description": "An independent, 100% private, on-device AI chatbot system powered by a custom-trained local neural network & NLP engine with live fine-tuning, neural visualizer, and local memory.",
+  "requestFramePermissions": ["microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
