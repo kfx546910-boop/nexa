@@ -56,6 +56,7 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({
   const [isEditing, setIsEditing] = useState(false);
   const [editDraft, setEditDraft] = useState(message.content);
   const [feedback, setFeedback] = useState<'like' | 'dislike' | null>(message.feedback || null);
+  const showTechnicalDetails = false;
 
   const handleCopyMessage = () => {
     onCopy(message.content);
@@ -112,14 +113,14 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({
           <div className="flex items-center justify-between text-xs">
             <div className="flex items-center gap-2">
               <span className="font-bold text-slate-200">
-                {isUser ? 'You' : 'Nexus AI'}
+                {isUser ? 'You' : 'NEXA'}
               </span>
-              {!isUser && (
+              {!isUser && showTechnicalDetails && (
                 <span className="text-[10px] px-1.5 py-0.5 rounded font-mono font-semibold bg-cyan-950 text-cyan-400 border border-cyan-500/30">
                   ON-DEVICE CORE
                 </span>
               )}
-              {message.metrics && !isUser && (
+              {!isUser && showTechnicalDetails && message.metrics && (
                 <span className="text-[11px] text-slate-400 font-mono hidden sm:inline-block">
                   {message.metrics.latencyMs}ms • {message.metrics.tokensPerSec} t/s
                 </span>
@@ -165,7 +166,7 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({
           )}
 
           {/* Inner Thought Steps Accordion (for Assistant) */}
-          {!isUser && message.thoughtSteps && message.thoughtSteps.length > 0 && (
+          {!isUser && showTechnicalDetails && message.thoughtSteps && message.thoughtSteps.length > 0 && (
             <div className="rounded-xl bg-slate-950/80 border border-slate-800 overflow-hidden text-xs">
               <button
                 onClick={() => setThoughtsExpanded(!thoughtsExpanded)}
@@ -350,7 +351,7 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({
                 </button>
 
                 {/* Add to Dataset */}
-                {onAddToTraining && userPromptForPair && (
+                {showTechnicalDetails && onAddToTraining && userPromptForPair && (
                   <button
                     onClick={() => onAddToTraining(userPromptForPair, message.content)}
                     title="Fine-tune on this pair in Training Studio"

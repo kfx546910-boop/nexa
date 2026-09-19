@@ -18,11 +18,20 @@ import {
   Layers,
   ChevronDown
 } from 'lucide-react';
-import { ChatMessage, ChatSession, FileAttachment, GenerationConfig, GenerationMetrics, ModelMode } from '../types/nexus';
-import { defaultNexusNeuralCore } from '../engine/nexusNeuralCore';
+import {
+  ChatMessage,
+  ChatSession,
+  FileAttachment,
+  GenerationConfig,
+  ModelMode,
+} from '../types/nexus';
+import { NEXOUSCore } from '../core/nexousCore';
 import { ChatSidebar } from './ChatSidebar';
 import { ChatMessageItem } from './ChatMessageItem';
 import { ChatInput } from './ChatInput';
+import { NexaThinkingOverlay } from '../hud/NexaThinkingOverlay';
+import { useNexaSystem } from '../state/NexaSystemContext';
+import { emitNotify, dispatchNexaEvent } from '../state/nexaSystem';
 
 interface NexusChatProps {
   onAddDatasetPrompt: (prompt: string, response: string) => void;
@@ -40,6 +49,7 @@ export const NexusChat: React.FC<NexusChatProps> = ({
   showParamsDrawer,
   setShowParamsDrawer
 }) => {
+  const { telemetry } = useNexaSystem();
   // --- Sessions State ---
   const [sessions, setSessions] = useState<ChatSession[]>(() => {
     try {
@@ -54,7 +64,7 @@ export const NexusChat: React.FC<NexusChatProps> = ({
     // Default initial session
     const initialSession: ChatSession = {
       id: 'session-default',
-      title: 'Welcome to Nexus AI',
+      title: 'Welcome to NEXA',
       createdAt: Date.now(),
       updatedAt: Date.now(),
       modelMode: 'nexus-4o',
@@ -62,22 +72,9 @@ export const NexusChat: React.FC<NexusChatProps> = ({
         {
           id: 'msg-welcome',
           role: 'assistant',
-          content: "Hello! I am **Nexus AI**, an autonomous, 100% on-device neural model created by **Suraj Jangid** and developed by **KingFX**. All tokenizer logic, self-attention, and reasoning pipelines run locally in your browser with zero calls to ChatGPT, Gemini, or external cloud servers.\n\nHow can I help you today? I can write code in TypeScript/Python/React, solve math & logic challenges, analyze attached files, or train on your custom datasets.",
-          thoughts: "[Intent: greeting (99%)]\n[Creator: Suraj Jangid | Developer: KingFX]\n[On-Device Memory: Active]\n[Mode: 100% Private]",
-          timestamp: Date.now(),
-          metrics: {
-            totalTokens: 46,
-            latencyMs: 78,
-            tokensPerSec: 59.1,
-            matchedIntent: 'greeting',
-            confidence: 0.99
-          },
-          thoughtSteps: [
-            { stage: 'intent', title: 'Local Subword Tokenization', detail: 'Tokenized input with on-device vocabulary.', confidence: 0.99 },
-            { stage: 'retrieval', title: 'Vector Memory Lookup', detail: 'Loaded system specifications from local device store.', confidence: 1.0 },
-            { stage: 'reasoning', title: 'Intent Classification', detail: 'Identified greeting / system initialization intent.', confidence: 0.99 },
-            { stage: 'complete', title: 'Inference Complete', detail: 'Model ready on client hardware.', confidence: 1.0 }
-          ]
+          content: "Hi! I'm NEXA. How can I help you today?",
+          thoughts: '',
+          timestamp: Date.now()
         }
       ]
     };
@@ -111,6 +108,7 @@ export const NexusChat: React.FC<NexusChatProps> = ({
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const abortControllerRef = useRef<boolean>(false);
+  const coreRef = useRef(new NEXOUSCore());
 
   // Auto-save sessions to localStorage
   useEffect(() => {
@@ -143,7 +141,7 @@ export const NexusChat: React.FC<NexusChatProps> = ({
         {
           id: `msg-welcome-${Date.now()}`,
           role: 'assistant',
-          content: "Hello! How can I assist you with programming, logical reasoning, mathematics, or drafting today?",
+          content: "Hello! I'm NEXA. How can I assist you with programming, logical reasoning, mathematics, or drafting today?",
           timestamp: Date.now()
         }
       ]
@@ -304,64 +302,12 @@ export const NexusChat: React.FC<NexusChatProps> = ({
       })
     );
 
-    const historyPayload = activeSession.messages
-      .filter(m => m.role === 'user' || m.role === 'assistant')
-      .map(m => ({ role: m.role as 'user' | 'assistant', content: m.content }));
-
+    const history = activeSession.messages
+      .filter(message => message.role !== 'system')
+      .map(message => ({ role: message.role as 'user' | 'assistant', content: message.content }));
+    const directResponse = await coreRef.current.process(fullPrompt, { history });
     try {
-      const result = await defaultNexusNeuralCore.generateResponseStream(
-        fullPrompt,
-        historyPayload,
-        config,
-        (token, metrics) => {
-          if (abortControllerRef.current) return;
-          setSessions(prev =>
-            prev.map(s => {
-              if (s.id === activeSessionId) {
-                return {
-                  ...s,
-                  messages: s.messages.map(m => {
-                    if (m.id === assistantMsgId) {
-                      return {
-                        ...m,
-                        content: m.content + token,
-                        metrics
-                      };
-                    }
-                    return m;
-                  })
-                };
-              }
-              return s;
-            })
-          );
-        },
-        step => {
-          if (abortControllerRef.current) return;
-          setSessions(prev =>
-            prev.map(s => {
-              if (s.id === activeSessionId) {
-                return {
-                  ...s,
-                  messages: s.messages.map(m => {
-                    if (m.id === assistantMsgId) {
-                      const existingSteps = m.thoughtSteps || [];
-                      return {
-                        ...m,
-                        thoughtSteps: [...existingSteps, step]
-                      };
-                    }
-                    return m;
-                  })
-                };
-              }
-              return s;
-            })
-          );
-        }
-      );
-
-      if (!abortControllerRef.current) {
+      if (directResponse.response) {
         setSessions(prev =>
           prev.map(s => {
             if (s.id === activeSessionId) {
@@ -371,10 +317,10 @@ export const NexusChat: React.FC<NexusChatProps> = ({
                   if (m.id === assistantMsgId) {
                     return {
                       ...m,
-                      content: result.fullText,
-                      thoughts: result.thoughts,
-                      metrics: result.metrics,
-                      thoughtSteps: result.steps
+                      content: directResponse.response,
+                      thoughts: '',
+                      metrics: undefined,
+                      thoughtSteps: []
                     };
                   }
                   return m;
@@ -384,6 +330,8 @@ export const NexusChat: React.FC<NexusChatProps> = ({
             return s;
           })
         );
+        setIsGenerating(false);
+        return;
       }
     } catch (error) {
       console.error('Inference error:', error);
@@ -408,11 +356,6 @@ export const NexusChat: React.FC<NexusChatProps> = ({
     const variants = targetMsg.variants || [oldContent];
 
     try {
-      const historyPayload = activeSession.messages
-        .slice(0, msgIndex - 1)
-        .map(m => ({ role: m.role as 'user' | 'assistant', content: m.content }));
-
-      // Clear current content for streaming
       setSessions(prev =>
         prev.map(s => {
           if (s.id === activeSessionId) {
@@ -427,29 +370,12 @@ export const NexusChat: React.FC<NexusChatProps> = ({
         })
       );
 
-      const result = await defaultNexusNeuralCore.generateResponseStream(
-        previousUserMsg.content,
-        historyPayload,
-        config,
-        (token, metrics) => {
-          if (abortControllerRef.current) return;
-          setSessions(prev =>
-            prev.map(s => {
-              if (s.id === activeSessionId) {
-                return {
-                  ...s,
-                  messages: s.messages.map((m, idx) =>
-                    idx === msgIndex ? { ...m, content: m.content + token, metrics } : m
-                  )
-                };
-              }
-              return s;
-            })
-          );
-        }
-      );
-
-      const updatedVariants = [...variants, result.fullText];
+      const history = activeSession.messages
+        .slice(0, msgIndex)
+        .filter(message => message.role !== 'system')
+        .map(message => ({ role: message.role as 'user' | 'assistant', content: message.content }));
+      const result = await coreRef.current.process(previousUserMsg.content, { history });
+      const updatedVariants = [...variants, result.response];
       setSessions(prev =>
         prev.map(s => {
           if (s.id === activeSessionId) {
@@ -459,10 +385,10 @@ export const NexusChat: React.FC<NexusChatProps> = ({
                 idx === msgIndex
                   ? {
                       ...m,
-                      content: result.fullText,
-                      thoughts: result.thoughts,
-                      metrics: result.metrics,
-                      thoughtSteps: result.steps,
+                      content: result.response,
+                      thoughts: '',
+                      metrics: undefined,
+                      thoughtSteps: [],
                       variants: updatedVariants,
                       activeVariantIndex: updatedVariants.length - 1
                     }
@@ -579,7 +505,7 @@ export const NexusChat: React.FC<NexusChatProps> = ({
               <button
                 onClick={() => setIsSidebarOpen(true)}
                 title="Open Sidebar"
-                className="p-1.5 rounded-lg bg-slate-900 border border-slate-800 hover:text-cyan-300 text-slate-400"
+                className="p-1.5 rounded-lg bg-slate-100 border border-slate-200 hover:text-emerald-700 text-slate-600"
               >
                 <PanelLeft className="w-4 h-4" />
               </button>
@@ -750,8 +676,20 @@ export const NexusChat: React.FC<NexusChatProps> = ({
           </div>
         )}
 
-        {/* Message Feed Area */}
-        <div className="flex-1 overflow-y-auto overflow-x-hidden">
+        {isGenerating ? (
+        <div className="nexa-chat-processing" aria-live="polite">
+          <NexaThinkingOverlay />
+        </div>
+      ) : null}
+
+      {/* Comm Status Bar */}
+      <div className="nexa-chat-comm" role="presentation">
+        <span className="nexa-chat-comm-dot" />
+        <span>SECURE CHANNEL // {isGenerating ? 'AI NODE ACTIVE' : 'AI NODE STANDBY'}</span>
+      </div>
+
+      {/* Message Feed Area */}
+      <div className="flex-1 overflow-y-auto overflow-x-hidden">
           {activeSession.messages.map((message, idx) => {
             // Find preceding user prompt for training pair feedback
             const prevUserPrompt =

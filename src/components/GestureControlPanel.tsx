@@ -1,0 +1,22 @@
+import React, { useEffect, useRef, useState } from 'react';
+import { Camera, Hand, MousePointer2, ShieldAlert, Power, Eye, EyeOff } from 'lucide-react';
+import { GestureController, type GestureEvent, type GestureStatus } from '../gesture/gestureController';
+
+interface GestureControlPanelProps { onGestureEvent: (event: GestureEvent) => void; }
+
+export const GestureControlPanel: React.FC<GestureControlPanelProps> = ({ onGestureEvent }) => {
+  const videoRef = useRef<HTMLVideoElement>(null); const canvasRef = useRef<HTMLCanvasElement>(null); const controllerRef = useRef<GestureController | null>(null);
+  const [enabled, setEnabled] = useState(false); const [preview, setPreview] = useState(true); const [status, setStatus] = useState<GestureStatus>({ camera: 'OFF', hand: false, gesture: 'IDLE', confidence: 0, cursor: false, lastAction: 'NONE', emergency: false });
+  const setController = () => { controllerRef.current = new GestureController(setStatus, onGestureEvent); return controllerRef.current; };
+  const toggle = async () => { if (enabled) { controllerRef.current?.stop(); setEnabled(false); } else { setEnabled(true); try { await (controllerRef.current || setController()).start(videoRef.current!, canvasRef.current!); } catch { setEnabled(false); } } };
+  useEffect(() => () => controllerRef.current?.stop(), []);
+  useEffect(() => { const onKey = (event: KeyboardEvent) => { if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) return; if (event.key.toLowerCase() === 'g') toggle(); if (event.key.toLowerCase() === 'e') controllerRef.current?.emergencyStop(); if (event.key.toLowerCase() === 'c') setPreview(value => !value); }; window.addEventListener('keydown', onKey); return () => window.removeEventListener('keydown', onKey); });
+  return <aside className="fixed bottom-14 right-3 z-30 w-72 rounded-xl border border-cyan-500/30 bg-slate-950/95 p-3 shadow-2xl backdrop-blur-md">
+    <div className="mb-2 flex items-center justify-between"><div className="flex items-center gap-2 text-xs font-bold text-slate-100"><Hand className="h-4 w-4 text-cyan-400" /> GESTURE CONTROL</div><button onClick={toggle} title="Toggle gesture control" className={`flex items-center gap-1 rounded-lg border px-2 py-1 text-[10px] font-bold ${enabled ? 'border-emerald-500/50 bg-emerald-950 text-emerald-300' : 'border-slate-700 bg-slate-900 text-slate-400'}`}><Power className="h-3 w-3" />{enabled ? 'ON' : 'OFF'}</button></div>
+    <div className="grid grid-cols-2 gap-1.5 text-[10px] font-mono"><StatusRow label="CAMERA" value={status.camera} good={status.camera === 'READY'} /><StatusRow label="HAND" value={status.hand ? 'DETECTED' : 'NOT DETECTED'} good={status.hand} /><StatusRow label="GESTURE" value={status.gesture} /><StatusRow label="CONFIDENCE" value={`${Math.round(status.confidence * 100)}%`} /><StatusRow label="CURSOR" value={status.cursor ? 'TRACKING' : 'OFF'} good={status.cursor} /><StatusRow label="ACTION" value={status.lastAction} /></div>
+    <div className="mt-2 flex items-center justify-between border-t border-slate-800 pt-2"><button onClick={() => setPreview(value => !value)} className="flex items-center gap-1 text-[10px] text-slate-400 hover:text-cyan-300">{preview ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />} PREVIEW</button>{status.emergency ? <button onClick={() => controllerRef.current?.clearEmergency()} className="flex items-center gap-1 text-[10px] text-rose-300 hover:text-rose-200"><ShieldAlert className="h-3 w-3" /> RESET SAFETY</button> : <span className="text-[10px] text-slate-500">G / E / C</span>}</div>
+    <div className={`relative mt-2 aspect-video overflow-hidden rounded-lg border ${status.camera === 'READY' ? 'border-cyan-500/30' : 'border-slate-800'} bg-slate-900 ${preview ? '' : 'hidden'}`}><video ref={videoRef} muted playsInline className="h-full w-full scale-x-[-1] object-cover" /><canvas ref={canvasRef} className="pointer-events-none absolute inset-0 h-full w-full scale-x-[-1]" />{status.camera !== 'READY' && <div className="absolute inset-0 flex items-center justify-center text-[10px] text-slate-500"><Camera className="mr-1 h-3 w-3" /> {status.camera}</div>}</div>
+  </aside>;
+};
+
+const StatusRow = ({ label, value, good }: { label: string; value: string; good?: boolean }) => <div className="flex min-w-0 items-center justify-between rounded bg-slate-900/80 px-1.5 py-1"><span className="text-slate-500">{label}</span><span className={`truncate pl-1 ${good ? 'text-emerald-300' : 'text-cyan-300'}`}>{value}</span></div>;

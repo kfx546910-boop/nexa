@@ -830,17 +830,38 @@ It was **Nexus** — an autonomous mind constructed from matrices, attention hea
       }
     }
 
+    // 7b. AI Image Generation capability (direct yes/no answer)
+    if (
+      /(generate|create|make|draw|produce)\s+(ai\s+)?(image|picture|photo|art|logo|images)/i.test(promptLower) ||
+      /(can|could|do|are)\s+(you|nexus)\s+(generate|create|make|draw|give|show).{0,30}(image|picture|photo|art|logo)/i.test(promptLower) ||
+      /^(draw|paint|sketch|render).{0,40}(image|picture|photo|art|logo|cat|dog|car|house|flower|scene)/i.test(promptLower) ||
+      promptLower.includes('image generation') ||
+      promptLower.includes('generate image') ||
+      promptLower.includes('make image')
+    ) {
+      return `**Short answer: No.** I don't generate AI images natively.
+
+I'm **Nexus AI**, a text-only on-device model — I handle code, reasoning, writing, and conversation entirely on your device. I don't have a built-in image generator, so I can't create pictures, logos, or artwork directly from text.
+
+> 💡 If you want image support, the **Capabilities** tab lists **"Create & edit images" (Nano Banana 2)**. That's an optional cloud feature — it activates once those provider credentials are configured.
+
+Meanwhile I can still help you:
+- **Write a detailed image prompt** you can paste into DALL·E, Midjourney, or Stable Diffusion.
+- **Describe/plan** what an image should look like.
+- **Generate SVG, ASCII art, or simple diagrams** right here as code.
+
+Want me to draft a strong image prompt or draw something as SVG?`;
+    }
+
     // 8. Default Natural Response
     const cleanTopic = promptTrim.replace(/[?.\n\r]+$/, '');
-    return `I have processed your query through Nexus's autonomous on-device neural engine.
+    return `Here's what I can tell you about **"${cleanTopic}"**:
 
-Regarding **"${cleanTopic}"**:
+I don't have a pre-written answer for this one, so let me keep it simple and direct — if you share a bit more context (target language, libraries, or what result you're expecting), I'll produce a complete, working solution on the spot.
 
-1. **Analysis**: Nexus's local weights and attention layers have evaluated your query with zero external cloud latency.
-2. **How to proceed**:
-   - **For code or scripts**: Provide the target language, libraries, or specific requirements, and I'll generate the solution.
-   - **For reasoning or mathematics**: I can walk through the proof, formula, or logic step-by-step.
-   - **For training & customization**: You can click **"Add to Training Set"** below to fine-tune my on-device weights on this exact interaction.
+- **Code or scripts** → tell me the language & requirements.
+- **Reasoning or math** → I'll walk through it step-by-step.
+- **Anything else** → just clarify what you need.
 
 What specific details would you like to explore next?`;
   }

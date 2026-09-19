@@ -131,6 +131,33 @@ export class NexusMemoryStore {
     return newItem;
   }
 
+  public updateItem(id: string, patch: Partial<Pick<KnowledgeMemoryItem, 'title' | 'content' | 'category' | 'tags'>>): KnowledgeMemoryItem | null {
+    const index = this.items.findIndex(item => item.id === id);
+    if (index < 0) return null;
+    const current = this.items[index];
+    const updated = {
+      ...current,
+      ...patch,
+      vector: this.computeVector(patch.content ?? current.content)
+    };
+    this.items[index] = updated;
+    this.saveToStorage();
+    return updated;
+  }
+
+  public forget(query: string): number {
+    const normalized = query.trim().toLowerCase();
+    if (!normalized) return 0;
+    const previousLength = this.items.length;
+    this.items = this.items.filter(item =>
+      !item.id.toLowerCase().includes(normalized)
+      && !item.title.toLowerCase().includes(normalized)
+      && !item.content.toLowerCase().includes(normalized)
+    );
+    if (this.items.length !== previousLength) this.saveToStorage();
+    return previousLength - this.items.length;
+  }
+
   public deleteItem(id: string): boolean {
     const prevLen = this.items.length;
     this.items = this.items.filter(i => i.id !== id);

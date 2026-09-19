@@ -16,6 +16,7 @@ import {
   Volume2
 } from 'lucide-react';
 import { FileAttachment } from '../types/nexus';
+import { dispatchNexaEvent } from '../state/nexaSystem';
 
 interface ChatInputProps {
   onSendMessage: (prompt: string, attachments?: FileAttachment[]) => void;
@@ -86,6 +87,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         setIsListening(true);
         setSpeechError(null);
         setInterimTranscript('');
+        dispatchNexaEvent('nexa:listening', { active: true });
       };
 
       recognition.onresult = (event: any) => {
@@ -115,6 +117,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
 
       recognition.onerror = (event: any) => {
         console.warn('Web Speech Recognition error:', event.error);
+        dispatchNexaEvent('nexa:listening', { active: false });
         if (event.error === 'not-allowed') {
           setSpeechError('Microphone access was denied. Please allow microphone permission in browser settings.');
         } else if (event.error === 'no-speech') {
@@ -130,6 +133,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         const wasActive = isListeningRef.current;
         setIsListening(false);
         setInterimTranscript('');
+        dispatchNexaEvent('nexa:listening', { active: false });
 
         // If user was speaking and we have a dictation result, auto-trigger the local model!
         if (wasActive && autoTriggerRef.current) {
@@ -167,6 +171,20 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     };
   }, [onSendMessage, isGenerating, attachments, text]);
 
+  // Accept voice commands dispatched from the CORE voice control and send them.
+  useEffect(() => {
+    const handleVoiceCommand = (event: Event) => {
+      const detail = (event as CustomEvent).detail as { text?: string } | undefined;
+      const incoming = detail?.text?.trim();
+      if (!incoming || isGenerating) return;
+      const full = text.trim() ? `${text} ${incoming}` : incoming;
+      setText('');
+      onSendMessage(full, attachments);
+    };
+    window.addEventListener('nexa:voice-command', handleVoiceCommand);
+    return () => window.removeEventListener('nexa:voice-command', handleVoiceCommand);
+  }, [onSendMessage, text, attachments, isGenerating]);
+
   // Toggle Voice Dictation via 'Listen' Button
   const toggleListen = useCallback(() => {
     if (!isSpeechSupported || !speechRecognitionRef.current) {
@@ -186,10 +204,12 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       }
       setIsListening(false);
       setInterimTranscript('');
+      dispatchNexaEvent('nexa:listening', { active: false });
     } else {
       setSpeechError(null);
       currentDictationRef.current = '';
       setInterimTranscript('');
+      dispatchNexaEvent('nexa:listening', { active: true });
       try {
         speechRecognitionRef.current.start();
         setIsListening(true);
@@ -350,7 +370,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                 key={idx}
                 onClick={() => onSendMessage(item.prompt)}
                 disabled={isGenerating}
-                className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-900/80 hover:bg-slate-850 border border-slate-800 hover:border-cyan-500/40 text-slate-300 hover:text-cyan-200 text-xs font-medium transition-all shadow-sm active:scale-95 disabled:opacity-50"
+                className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-100 hover:bg-slate-200 border border-slate-200 hover:border-emerald-300 text-slate-700 hover:text-emerald-700 text-xs font-medium transition-all shadow-sm active:scale-95 disabled:opacity-50"
               >
                 <Icon className="w-3.5 h-3.5 text-cyan-400" />
                 <span>{item.label}</span>
@@ -470,7 +490,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       )}
 
       {/* Input Box Card */}
-      <div className={`relative rounded-2xl sm:rounded-3xl bg-slate-900 border shadow-2xl transition-all overflow-hidden ${
+      <div className={`nexa-chat-input-shell relative rounded-2xl sm:rounded-3xl overflow-hidden transition-all ${
         isListening 
           ? 'border-cyan-500/80 ring-2 ring-cyan-500/20' 
           : 'border-slate-800 focus-within:border-cyan-500/60'
@@ -506,7 +526,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
               placeholder={
                 isListening 
                   ? "🎙️ Listening... Speak your prompt and Nexus will auto-respond..." 
-                  : "Message Nexus AI... (or click Listen to speak, Press Enter to send)"
+                  : "Message NEXA... (or click Listen to speak, Press Enter to send)"
               }
               rows={1}
               disabled={isGenerating}

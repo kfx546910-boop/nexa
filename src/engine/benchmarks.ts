@@ -1,4 +1,6 @@
 import { BenchmarkResult } from '../types/nexus';
+
+export type { BenchmarkResult } from '../types/nexus';
 import { defaultNexusNeuralCore } from './nexusNeuralCore';
 import { defaultTokenizer } from './tokenizer';
 
